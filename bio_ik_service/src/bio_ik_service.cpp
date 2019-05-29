@@ -6,6 +6,8 @@
 #include <tf_conversions/tf_eigen.h>
 #include <tf_conversions/tf_kdl.h>
 
+#include <tf/transform_listener.h>
+
 #include <tf2/LinearMath/Vector3.h>
 #include <tf2/LinearMath/Quaternion.h>
 
@@ -125,17 +127,17 @@ static bool getPositionIK(moveit_msgs::GetPositionIK::Request &request,
   if (request.ik_request.pose_stamped_vector.empty()) {
     if (request.ik_request.ik_link_name.empty()) {
       success = robot_state.setFromIK(
-          joint_model_group, request.ik_request.pose_stamped.pose,
+          joint_model_group, request.ik_request.pose_stamped.pose,5,
           request.ik_request.timeout.toSec(),
           callback, ik_options);
     } else {
       success = robot_state.setFromIK(
           joint_model_group, request.ik_request.pose_stamped.pose,
-          request.ik_request.ik_link_name, request.ik_request.timeout.toSec(),
+          request.ik_request.ik_link_name,5, request.ik_request.timeout.toSec(),
           callback, ik_options);
     }
   } else {
-    EigenSTL::vector_Isometry3d poses;
+    EigenSTL::vector_Affine3d poses;
     poses.reserve(request.ik_request.pose_stamped_vector.size());
     for (auto &pose : request.ik_request.pose_stamped_vector) {
       poses.emplace_back();
@@ -145,12 +147,12 @@ static bool getPositionIK(moveit_msgs::GetPositionIK::Request &request,
       std::vector<std::string> end_effector_names;
       joint_model_group->getEndEffectorTips(end_effector_names);
       success = robot_state.setFromIK(
-          joint_model_group, poses, end_effector_names,
+          joint_model_group, poses, end_effector_names,5,
           request.ik_request.timeout.toSec(),
           callback, ik_options);
     } else {
       success = robot_state.setFromIK(
-          joint_model_group, poses, request.ik_request.ik_link_names,
+          joint_model_group, poses, request.ik_request.ik_link_names,5,
           request.ik_request.timeout.toSec(),
           callback, ik_options);
     }
@@ -177,17 +179,18 @@ static bool getApproximateIK(moveit_msgs::GetPositionIK::Request &request,
   return getPositionIK(request, response, true);
 }
 
-static tf2::Vector3 p(const geometry_msgs::Point &p) {
-  return tf2::Vector3(p.x, p.y, p.z);
+static tf::Vector3 p(const geometry_msgs::Point &p) {
+  return tf::Vector3(p.x, p.y, p.z);
 }
 
-static tf2::Vector3 p(const geometry_msgs::Vector3 &p) {
-  return tf2::Vector3(p.x, p.y, p.z);
+static tf::Vector3 p(const geometry_msgs::Vector3 &p) {
+  return tf::Vector3(p.x, p.y, p.z);
 }
 
-static tf2::Quaternion q(const geometry_msgs::Quaternion &q) {
-  return tf2::Quaternion(q.x, q.y, q.z, q.w);
+static tf::Quaternion q(const geometry_msgs::Quaternion &q) {
+  return tf::Quaternion(q.x, q.y, q.z, q.w);
 }
+
 
 static double w(double w, double def = 1.0) {
   if (w == 0 || !std::isfinite(w))
@@ -199,7 +202,7 @@ static void convertGoals(const bio_ik_msgs::IKRequest &ik_request,
                          bio_ik::BioIKKinematicsQueryOptions &ik_options) {
   for (auto &m : ik_request.position_goals) {
     ik_options.goals.emplace_back(
-        new bio_ik::PositionGoal(m.link_name, p(m.position), w(m.weight)));
+        new bio_ik::PositionGoal( m.link_name, p(m.position), w(m.weight)));
   }
 
   for (auto &m : ik_request.orientation_goals) {
@@ -337,8 +340,8 @@ static bool getBioIK(bio_ik_msgs::GetIK::Request &request,
   }
 
   bool success = robot_state.setFromIK(
-      joint_model_group, EigenSTL::vector_Isometry3d(),
-      std::vector<std::string>(), request.ik_request.timeout.toSec(),
+      joint_model_group, EigenSTL::vector_Affine3d(),
+      std::vector<std::string>(),5, request.ik_request.timeout.toSec(),
       callback, ik_options);
 
   robot_state.update();
